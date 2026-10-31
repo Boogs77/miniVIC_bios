@@ -1,0 +1,23 @@
+# build output (sh make.sh)
+tmp/
+tmp_old/
+# test output
+test/
+screenshots/
+test_keyb_sd/out.mjs
+test_system/out.mjs
+__pycache__/
+# local only (kept on disk and in the G: archive, not published)
+CLAUDE.md
+FILE VARI/
+not eater boogs/
+orig/
+regress.sh
+TODO.txt
+ZEROPAGE_STUDY.pdf
+zeropage totali.s
+sdcard_drv_old.s
+sdcard_donkey.s
+lcd.s
+tests/
+release_gdrive.py
