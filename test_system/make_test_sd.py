@@ -3,7 +3,7 @@
 make_test_sd.py - a test BIOS and a test SD image for the emulator (loaded by hand: "Load ROM .bin",
 "Insert .img image"). Nothing in bo6502-SDbuilder, MiniVIC Games or MiniVIC Apps is changed.
 
-  test/bios_keyb_sd.bin   the BIOS 27.10.26 KEYB/SD (32 KB, $8000-$FFFF)
+  test/bios_keyb_sd.bin   the BIOS 03.11.26 KEYB/SD (32 KB, $8000-$FFFF)
   test/sd_test.img        16 MB: the MiniVIC games, the MiniVIC Apps, the songs (types in the directory,
                           for the "[TYPE] Name" serial line), and some documents ready to open:
                           LETTER (WRITE), BUDGET (CALC), FRIENDS (FILE), HELLO (an ASM source)

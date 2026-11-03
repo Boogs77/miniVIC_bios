@@ -44,7 +44,7 @@ SD_LBA            = $0316    ; 4 bytes: sector number, little endian ($0316 = bi
 
 ; "[TYPE] Name" line for the serial terminal (30-10-2026): type and name of the slot are copied here
 ; by sd_get_params, because loading the program overwrites the directory at $1000.
-sd_ann_type       = $031A    ; entry type: 0 unknown (no line), 1 GAME, 2 APP, 3 TOOL
+sd_ann_type       = $031A    ; entry type: 0 unknown (no line), 1 GAME, 2 APP, 3 TOOL, 4 SOUND
 sd_ann_name       = $031B    ; 32 bytes: name to send on the serial, terminated by $00
 sd_ann_max        = 31       ; maximum characters
 
@@ -445,7 +445,7 @@ SD_ANNOUNCE:
   PHY
   LDX sd_ann_type
   BEQ @end
-  CPX #4
+  CPX #5
   BCS @end                   ; unknown type
   LDA #'['
   JSR sd_ser_out
@@ -489,8 +489,8 @@ sd_ser_out:
   BNE @txdelay
   RTS
 
-sd_ann_tofs:    .byte 0, 5, 9              ; type 1..3 -> position in sd_ann_tstr
-sd_ann_tstr:    .byte "GAME", 0, "APP", 0, "TOOL", 0
+sd_ann_tofs:    .byte 0, 5, 9, 14          ; type 1..4 -> position in sd_ann_tstr
+sd_ann_tstr:    .byte "GAME", 0, "APP", 0, "TOOL", 0, "SOUND", 0
 
 ; ==========================================
 ; sd_card_init: card init sequence

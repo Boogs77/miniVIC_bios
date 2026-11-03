@@ -1,5 +1,5 @@
 .segment "PROGRAM"
-.define BIOS_VER "27.10.26 KEYB/SD"
+.define BIOS_VER "03.11.26 KEYB/SD"
 
 ZP_PTR = $40
 ZP_PTR2 = $42
@@ -28,6 +28,21 @@ MENU_PAGE     = $1200       ; page shown (0-based)
 MENU_PAGES    = $1201       ; number of pages
 MENU_TOTAL    = $1202       ; total number of programs
 MENU_IDX      = $1203       ; entry chosen in the page (0..8)
+MENU_CAT      = $1204       ; submenu: 0 ALL (SD pages as they are), 1 GAMES, 2 APPS, 3 SOUNDS
+MENU_FCNT     = $1205       ; number of programs in the submenu (1..255)
+MENU_SCAN     = $1206       ; directory page being scanned
+MENU_DPAGES   = $1207       ; number of directory pages on the SD
+MENU_TMP      = $1208       ; scratch byte
+
+; Submenu (MENU_CAT 1..3): sd_scan reads every directory page once and keeps the matching programs
+; in RAM. A page of the submenu is then rebuilt at $1000 in the same layout as a directory page,
+; so sd_draw works the same way for both.
+FILT_SLOT     = $1300       ; SD slot of program n of the submenu
+FILT_FLAG     = $1400       ; flags of program n
+FILT_NAME     = $2000       ; 32-byte name of program n (255 * 32 = $1FE0 bytes, up to $3FDF)
+
+; directory type byte (+6 of the entry parameters): 1 GAME, 2 APP, 3 TOOL, 4 SOUND
+SD_DIR_TYPE   = SD_DIR_BUF+16+6
 
 KEY_ESC       = $1B
 KEY_PREV      = 'A'         ; previous page ('a' is accepted too)
@@ -55,7 +70,7 @@ wait_key_main:
     cmp #'2'            
     beq go_basic              ; '2' -> Jump to MS BASIC
     cmp #'3'            
-    beq go_sdcard            ; '3' -> Open Games Menu
+    beq go_sdcard            ; '3' -> SD menu: GAMES / APPS / SOUNDS / ALL
     cmp #'4'            
     bne wait_key_main         ; other keys: ignore
     jmp go_info               ; '4' -> System Info (jmp: the beq no longer reaches after the additions to the SD submenu)
@@ -86,14 +101,22 @@ go_sdcard:
     sta MENU_PAGE
     jsr SD_READ_DIR             ; A = 0: page 0 -> RAM $1000-$11FF (only touches that area)
     jsr sd_validate
-    bcs sd_dir_bad
+    bcc @dir_ok
+    jmp sd_dir_bad
+@dir_ok:
 
     lda SD_DIR_TOTAL            ; total programs (v3)...
     bne @tot_ok
     lda SD_DIR_COUNT            ; ...or, in a v2 directory, the programs of page 0
 @tot_ok:
     sta MENU_TOTAL
-    ldx #0                      ; pages = total / 9 rounded up
+    jsr sd_calc_pages
+    stx MENU_DPAGES
+    jmp sd_cat_menu
+
+; sd_calc_pages: A = number of programs (1..255) -> X = pages of 9, rounded up
+sd_calc_pages:
+    ldx #0
 @pg:
     inx
     sec
@@ -101,8 +124,233 @@ go_sdcard:
     beq @pg_done                ; remainder 0: exact pages
     bcs @pg                     ; some are still left
 @pg_done:
+    rts
+
+; ---------------------------------------------------------------
+; submenu choice: 1 GAMES, 2 APPS (APP and TOOL), 3 SOUNDS, 4 ALL
+; ---------------------------------------------------------------
+sd_cat_menu:
+    jsr RESET_SERIAL_TERM
+    jsr INIT_CRT
+    lda #<sys_cat_text
+    ldx #>sys_cat_text
+    jsr print_str
+    jsr FLUSH_KEYBOARD_HARD
+@wait:
+    jsr CHRIN_NO_ECHO
+    bcc @wait
+    cmp #KEY_ESC
+    bne @not_esc
+    jmp SHOW_MENU               ; ESC -> back to the main menu
+@not_esc:
+    cmp #'4'
+    beq @all
+    cmp #'1'
+    bcc @wait
+    cmp #'3'+1
+    bcs @wait                   ; only '1'..'4'
+    sec
+    sbc #'0'
+    sta MENU_CAT                ; 1..3
+    jsr RESET_SERIAL_TERM
+    jsr INIT_CRT
+    lda #<sys_sd_reading
+    ldx #>sys_sd_reading
+    jsr print_str               ; "READING SD DIRECTORY..." (one read per directory page)
+    jsr sd_scan
+    bcc @scan_ok
+    jmp sd_dir_bad
+@scan_ok:
+    lda MENU_FCNT
+    beq @empty
+    jsr sd_calc_pages
     stx MENU_PAGES
+    stz MENU_PAGE
+    jsr sd_build_page
     jmp sd_draw
+@empty:
+    jsr RESET_SERIAL_TERM
+    jsr INIT_CRT
+    lda #<sys_cat_empty
+    ldx #>sys_cat_empty
+    jsr print_str               ; "NO PROGRAMS OF THIS KIND ON THE SD"
+@empty_wait:
+    jsr CHRIN_NO_ECHO
+    bcc @empty_wait
+    jmp sd_cat_menu
+@all:
+    stz MENU_CAT                ; ALL: the SD pages as they are, like the old menu
+    lda MENU_DPAGES
+    sta MENU_PAGES
+    lda #0
+    sta MENU_PAGE
+    jsr SD_READ_DIR             ; page 0 again (a submenu may have left another page at $1000)
+    jsr sd_validate
+    bcc @all_ok
+    jmp sd_dir_bad
+@all_ok:
+    jmp sd_draw
+
+; sd_scan: reads every directory page and keeps the programs of submenu MENU_CAT in
+; FILT_SLOT/FILT_FLAG/FILT_NAME. Out: MENU_FCNT = how many; C=1 if a page is not valid
+sd_scan:
+    stz MENU_FCNT
+    stz MENU_SCAN
+@page:
+    lda MENU_SCAN
+    jsr SD_READ_DIR             ; page -> $1000
+    jsr sd_validate
+    bcc @valid
+    rts                         ; C=1
+@valid:
+    stz MENU_IDX                ; entry in the page
+@entry:
+    lda MENU_IDX
+    asl
+    asl
+    asl
+    tay                         ; Y = entry * 8 (parameters)
+    lda SD_DIR_TYPE,y
+    jsr sd_type_match
+    bcc @next
+    ldy MENU_FCNT
+    lda MENU_SCAN
+    asl
+    asl
+    asl
+    clc
+    adc MENU_SCAN               ; page * 9
+    clc
+    adc MENU_IDX                ; + entry = slot
+    sta FILT_SLOT,y
+    ldx MENU_IDX
+    lda SD_DIR_FLAGS,x
+    sta FILT_FLAG,y
+    lda MENU_IDX
+    ldx #>(SD_DIR_BUF+SD_DIR_HDR)
+    jsr sd_name_ptr             ; ZP_PTR = name in the directory page
+    lda ZP_PTR
+    sta ZP_PTR2
+    lda ZP_PTR+1
+    sta ZP_PTR2+1
+    lda MENU_FCNT
+    ldx #>FILT_NAME
+    jsr sd_name_ptr             ; ZP_PTR = name n in RAM
+    jsr sd_copy_name            ; (ZP_PTR2) -> (ZP_PTR)
+    inc MENU_FCNT
+@next:
+    inc MENU_IDX
+    lda MENU_IDX
+    cmp SD_DIR_COUNT
+    bne @entry
+    inc MENU_SCAN
+    lda MENU_SCAN
+    cmp MENU_DPAGES
+    bne @page
+    clc
+    rts
+
+; sd_type_match: A = type byte. C=1 if it belongs to submenu MENU_CAT
+sd_type_match:
+    ldx MENU_CAT
+    cpx #2
+    bne @one
+    cmp #3                      ; APPS: APP (2) and TOOL (3)
+    beq @yes
+    bra @cmp
+@one:
+    cpx #3
+    bne @cmp                    ; GAMES: type 1 = MENU_CAT
+    ldx #4                      ; SOUNDS: type 4
+@cmp:
+    stx MENU_TMP
+    cmp MENU_TMP
+    beq @yes
+    clc
+    rts
+@yes:
+    sec
+    rts
+
+; sd_name_ptr: ZP_PTR = (X * 256 + offset of the low byte) + A * 32
+;   X = high byte of the table: $10 for the names at $1060 (low byte $60), $20 for FILT_NAME
+sd_name_ptr:
+    pha
+    lsr
+    lsr
+    lsr                         ; A * 32 / 256
+    stx ZP_PTR+1
+    clc
+    adc ZP_PTR+1
+    sta ZP_PTR+1
+    pla
+    asl
+    asl
+    asl
+    asl
+    asl                         ; (A * 32) and 255
+    cpx #>FILT_NAME
+    beq @no_ofs                 ; FILT_NAME starts at a page boundary
+    clc
+    adc #<(SD_DIR_BUF+SD_DIR_HDR)
+    bcc @no_ofs
+    inc ZP_PTR+1
+@no_ofs:
+    sta ZP_PTR
+    rts
+
+; sd_copy_name: copies 32 bytes from (ZP_PTR2) to (ZP_PTR)
+sd_copy_name:
+    ldy #SD_DIR_ESIZE-1
+@c:
+    lda (ZP_PTR2),y
+    sta (ZP_PTR),y
+    dey
+    bpl @c
+    rts
+
+; sd_build_page: rebuilds page MENU_PAGE of the submenu at $1000 (count, flags, names)
+sd_build_page:
+    lda MENU_PAGE
+    asl
+    asl
+    asl
+    clc
+    adc MENU_PAGE
+    sta MENU_SCAN               ; first program of the page (MENU_SCAN is free after sd_scan)
+    lda MENU_FCNT
+    sec
+    sbc MENU_SCAN               ; programs left
+    cmp #SD_PAGE_SIZE+1
+    bcc @cnt
+    lda #SD_PAGE_SIZE
+@cnt:
+    sta SD_DIR_COUNT
+    stz MENU_IDX
+@e:
+    lda MENU_SCAN
+    clc
+    adc MENU_IDX
+    tay                         ; Y = program n
+    ldx MENU_IDX
+    lda FILT_FLAG,y
+    sta SD_DIR_FLAGS,x
+    tya
+    ldx #>FILT_NAME
+    jsr sd_name_ptr
+    lda ZP_PTR
+    sta ZP_PTR2
+    lda ZP_PTR+1
+    sta ZP_PTR2+1               ; source: name n in RAM
+    lda MENU_IDX
+    ldx #>(SD_DIR_BUF+SD_DIR_HDR)
+    jsr sd_name_ptr             ; destination: entry in the page
+    jsr sd_copy_name
+    inc MENU_IDX
+    lda MENU_IDX
+    cmp SD_DIR_COUNT
+    bne @e
+    rts
 
 sd_dir_bad:
     jsr RESET_SERIAL_TERM
@@ -147,9 +395,13 @@ sd_validate:
 sd_draw:
     jsr RESET_SERIAL_TERM       ; clears the screen
     jsr INIT_CRT
-    lda #<sys_sd_head
-    ldx #>sys_sd_head
-    jsr print_str               ; title
+    ldx MENU_CAT
+    lda sys_head_lo,x
+    pha
+    lda sys_head_hi,x
+    tax
+    pla
+    jsr print_str               ; title of the submenu
     lda #<sys_sd_page
     ldx #>sys_sd_page
     jsr print_str               ; " PAGE "
@@ -235,7 +487,7 @@ sd_menu_wait:
     jsr CHRIN_NO_ECHO
     bcc sd_menu_wait
     cmp #KEY_ESC
-    beq sd_menu_back            ; ESC -> back to the main menu
+    beq sd_menu_back            ; ESC -> back to the submenu choice
     cmp #'1'
     bcc @not_num                ; below '1'
     cmp #'9'+1
@@ -252,7 +504,12 @@ sd_menu_wait:
     clc
     adc MENU_PAGE               ; page * 9
     clc
-    adc MENU_IDX                ; + entry = slot
+    adc MENU_IDX                ; + entry = slot (ALL) or program n (submenu)
+    ldx MENU_CAT
+    beq @slot
+    tax
+    lda FILT_SLOT,x             ; submenu: SD slot of program n
+@slot:
     jmp sd_do_copy              ; A = slot
 
 @not_num:
@@ -284,6 +541,11 @@ sd_menu_wait:
     lda #0                      ; from the last page wrap to the first one
 @p_go:
     sta MENU_PAGE
+    ldx MENU_CAT
+    beq @p_read
+    jsr sd_build_page           ; submenu: page rebuilt from RAM, no SD read
+    jmp sd_draw
+@p_read:
     jsr SD_READ_DIR             ; A = page to read
     jsr sd_validate
     bcc @page_ok
@@ -292,7 +554,7 @@ sd_menu_wait:
     jmp sd_draw
 
 sd_menu_back:
-    jmp SHOW_MENU
+    jmp sd_cat_menu
 
 sd_do_copy:                     ; input: A = slot (0-based), MENU_IDX = entry in the page
     ldx #$FF
@@ -700,9 +962,46 @@ sys_sd_reading:
     .byte " ", $0D, $0A
     .byte "READING SD DIRECTORY...", $0D, $0A, 0
 
-sys_sd_head:
+sys_cat_text:
     .byte " ", $0D, $0A
-    .byte " --- SD PROGRAMS MENU ---", $0D, $0A, 0
+    .byte " --- SD PROGRAMS MENU ---", $0D, $0A
+    .byte " ", $0D, $0A
+    .byte " 1. GAMES", $0D, $0A
+    .byte " ", $0D, $0A
+    .byte " 2. APPS", $0D, $0A
+    .byte " ", $0D, $0A
+    .byte " 3. SOUNDS", $0D, $0A
+    .byte " ", $0D, $0A
+    .byte " 4. ALL PROGRAMS", $0D, $0A
+    .byte " ", $0D, $0A
+    .byte " ESC = MAIN MENU", $0D, $0A
+    .byte " ", $0D, $0A
+    .byte "Select > ", 0
+
+sys_cat_empty:
+    .byte " ", $0D, $0A
+    .byte "NO PROGRAMS OF THIS KIND ON THE SD", $0D, $0A
+    .byte "(SD MADE BEFORE THE TYPES? TRY 4. ALL)", $0D, $0A
+    .byte " ", $0D, $0A
+    .byte "Press any key...     ", 0
+
+; title of the list, by MENU_CAT
+sys_head_lo:
+    .byte <sys_head_all, <sys_head_games, <sys_head_apps, <sys_head_sounds
+sys_head_hi:
+    .byte >sys_head_all, >sys_head_games, >sys_head_apps, >sys_head_sounds
+sys_head_all:
+    .byte " ", $0D, $0A
+    .byte " --- SD ALL PROGRAMS ---", $0D, $0A, 0
+sys_head_games:
+    .byte " ", $0D, $0A
+    .byte " --- SD GAMES ---", $0D, $0A, 0
+sys_head_apps:
+    .byte " ", $0D, $0A
+    .byte " --- SD APPS ---", $0D, $0A, 0
+sys_head_sounds:
+    .byte " ", $0D, $0A
+    .byte " --- SD SOUNDS ---", $0D, $0A, 0
 
 sys_sd_page:
     .byte " PAGE ", 0
@@ -718,7 +1017,7 @@ sys_sd_nav:
     .byte " A = PREV PAGE   D = NEXT PAGE", $0D, $0A, 0
 
 sys_sd_foot2:
-    .byte " ESC = MAIN MENU", $0D, $0A
+    .byte " ESC = BACK", $0D, $0A
     .byte " N> = RUNS AFTER LOADING", $0D, $0A
     .byte " ", $0D, $0A
     .byte "Select > ", 0

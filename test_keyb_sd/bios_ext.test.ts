@@ -143,11 +143,13 @@ function sdSuite(label: string, card: any, expectType: number) {
   const img = sdImage(9 * 1024 * 1024);
   const orig = img.slice();
   const m = machine(card, img);
-  assert(screenText(m).includes('27.10.26 KEYB/SD') || true, '');
-  // load game from the SD menu: '3' then the program in position 2 (slot 1)
+  assert(screenText(m).includes('03.11.26 KEYB/SD') || true, '');
+  // load game from the SD menu: '3', '4' (ALL) then the program in position 2 (slot 1)
   tap(m, 'Digit3'); runFrames(m, 150);
   const menu = screenText(m);
-  assert(menu.includes('SD PROGRAMS MENU'), `${label}: SD menu not found\n${menu}`);
+  assert(menu.includes('SD PROGRAMS MENU') && menu.includes('4. ALL PROGRAMS'), `${label}: SD menu not found\n${menu}`);
+  tap(m, 'Digit4'); runFrames(m, 150);
+  assert(screenText(m).includes('SD ALL PROGRAMS'), `${label}: ALL list not found\n${screenText(m)}`);
   tap(m, 'Digit2');
   let t = 0;
   while (m.cpu.pc >= 0x8000 && t < 1500) { runFrames(m, 10); t += 10; }
@@ -157,6 +159,14 @@ function sdSuite(label: string, card: any, expectType: number) {
   const same = hex(m.ram.subarray(0x1000, 0x1000 - 0x30 + n)) === hex(data.subarray(0x30, n));
   assert(m.cpu.pc < 0x8000 && same, `${label}: game ${games[1]} not loaded correctly (pc=$${m.cpu.pc.toString(16)})`);
   console.log(`      ${label}: menu load of ${games[1]} ok in ${(t / 60).toFixed(1)} s`);
+
+  // an SD without types (made before them): GAMES is empty and says so, a key goes back to the choice
+  const me = machine(card, img);
+  tap(me, 'Digit3'); runFrames(me, 150);
+  tap(me, 'Digit1'); runFrames(me, 300);
+  assert(screenText(me).includes('NO PROGRAMS OF THIS KIND'), `${label}: empty submenu\n${screenText(me)}`);
+  tap(me, 'Space'); runFrames(me, 150);
+  assert(screenText(me).includes('4. ALL PROGRAMS'), `${label}: back from the empty submenu\n${screenText(me)}`);
 
   // sector API
   const m2 = machine(card, img);
@@ -290,6 +300,7 @@ function serialLine() {
     const m = machine(null, img.slice());
     watch(m);
     tap(m, 'Digit3'); runFrames(m, 150);
+    tap(m, 'Digit4'); runFrames(m, 150);   // ALL: the SD page as it is
     out.length = 0;
     tap(m, key);
     let t = 0;

@@ -2,7 +2,7 @@
 
 ROM image of the **miniVIC** (BO6502) computer: Microsoft BASIC, WozMon and a BIOS with a boot menu,
 PS/2 keyboard, TMS9918 text output, serial port and an SD card loader. The current version is
-**27.10.26 KEYB/SD**: it runs games and applications from the same SD card.
+**03.11.26 KEYB/SD**: it runs games and applications from the same SD card.
 
 - `bin/boogs.bin`: the 32 KB image to program into the CAT28C256P EEPROM (`$8000-$FFFF`).
   The [miniVIC emulator](https://github.com/Boogs77/BO6502-miniVIC-emulator) takes it from here.

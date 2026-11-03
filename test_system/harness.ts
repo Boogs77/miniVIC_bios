@@ -37,6 +37,16 @@ export function sdImage(apps: App[]): Uint8Array {
   return img;
 }
 
+const SUB_HEAD = ['', 'SD GAMES', 'SD APPS', 'SD SOUNDS', 'SD ALL PROGRAMS'];
+/** from the SD PROGRAMS MENU screen: presses the submenu key and waits for its list (the scan reads every directory page) */
+export function openSub(m: any, key: (code: string) => void, sub: number) {
+  key('Digit' + sub);
+  let f = 0;
+  while (!(screenText(m).includes(SUB_HEAD[sub]) && screenText(m).includes('Select >')) && f < 1200) { runFrames(m, 10); f += 10; }
+  assert(screenText(m).includes(SUB_HEAD[sub]), `submenu ${sub} not shown\n` + screenText(m));
+  runFrames(m, 30);
+}
+
 /** a machine running one application, with idle detection and key timings */
 export class Run {
   m: any;
@@ -44,7 +54,8 @@ export class Run {
   inKey = -1;
   worst = 0;
   serial: number[] = [];
-  constructor(public app: App, img: Uint8Array, slot: number, page = 1) {
+  /** sub = key of the SD submenu: 1 GAMES, 2 APPS, 3 SOUNDS, 4 ALL (the SD pages as they are) */
+  constructor(public app: App, img: Uint8Array, slot: number, page = 1, sub = 4) {
     const m = this.m = buildMachine(defaultConfig('minivic'));
     m.loadRom(new Uint8Array(readFileSync(process.env.BIOS_ROM!)));
     (m.board<SdCardBoard>('sdcard')! as any).card.insert(img);
@@ -63,6 +74,7 @@ export class Run {
     m.board<SerialBoard>('serial')!.acia.onTransmit = (b: number) => this.serial.push(b);
     this.key('Digit3'); runFrames(m, 150);
     assert(screenText(m).includes('SD PROGRAMS MENU'), 'SD menu not found\n' + screenText(m));
+    openSub(m, (c: string) => this.key(c), sub);
     for (let p = 1; p < page; p++) { this.key('KeyD'); runFrames(m, 150); }   // next menu page
     this.serial.length = 0;
     this.key('Digit' + slot);
