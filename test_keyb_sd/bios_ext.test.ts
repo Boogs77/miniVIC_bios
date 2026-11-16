@@ -143,7 +143,7 @@ function sdSuite(label: string, card: any, expectType: number) {
   const img = sdImage(9 * 1024 * 1024);
   const orig = img.slice();
   const m = machine(card, img);
-  assert(screenText(m).includes('03.11.26 KEYB/SD') || true, '');
+  assert(screenText(m).includes('16.11.26 KEYB/SD') || true, '');
   // load game from the SD menu: '3', '4' (ALL) then the program in position 2 (slot 1)
   tap(m, 'Digit3'); runFrames(m, 150);
   const menu = screenText(m);

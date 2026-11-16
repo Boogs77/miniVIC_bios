@@ -1,5 +1,5 @@
 .segment "PROGRAM"
-.define BIOS_VER "03.11.26 KEYB/SD"
+.define BIOS_VER "16.11.26 KEYB/SD"
 
 ZP_PTR = $40
 ZP_PTR2 = $42

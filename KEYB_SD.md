@@ -1,4 +1,4 @@
-# BIOS 03.11.26 KEYB/SD
+# BIOS 16.11.26 KEYB/SD
 
 Fork of the BIOS `024 - ... msbasic-20261024` (version 24.10.26), made for the applications of `MiniVIC Apps`.
 It fixes two problems: the keyboard gave no arrows, Delete, function keys, Ctrl and Alt, and the SD could only be read, and only up to 2 GB.
@@ -6,7 +6,7 @@ Everything that was there before works as before: menu, BASIC, WozMon, program l
 
 ## Build and EEPROM
 - `sh make.sh` creates `tmp/boogs.bin` (32 KB, the whole CAT28C256P image from `$8000` to `$FFFF`).
-- The main menu shows the version `03.11.26 KEYB/SD` (27.10.26 KEYB/SD before the SD submenus of 03-11-2026).
+- The main menu shows the version `16.11.26 KEYB/SD` (27.10.26 KEYB/SD before the SD submenus of 03-11-2026, 03.11.26 KEYB/SD before the BASIC and keyboard fixes of 16-11-2026).
 
 ## New jump table entries (at the end, the old ones do not move)
 
