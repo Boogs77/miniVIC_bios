@@ -44,14 +44,11 @@ print_crt_ch:                                 ; Write to VRAM 2 bytes and data
   cmp #$0a           ; enter - go to second line
   beq enter_pressed
   cmp #$0d           ; enter - go to second line
-  beq EXIT_PRINTCH 
+  beq JUMP_EXIT      ; (EXIT_PRINTCH is out of reach after the backspace code)
   cmp #$1b           ; escape - clear display
   beq esc_pressed
-;  cmp #$08           ; backspace - clear last char
-;  beq backspace_pressed
-;  cmp #$20
-;  bcc JUMP_EXIT
-;  
+  cmp #$08           ; backspace - back one place and erase it
+  beq backspace_pressed
   jmp print_char
 ;
 enter_pressed:
@@ -83,14 +80,25 @@ esc_pressed:
   JSR mol_8bit
   jmp EXIT_PRINTCH 
   
-;backspace_pressed:
-;  ;dec COL_VAR
-;  ;jsr mol_8bit
-;  ;LDA #32
-;  jsr print_char
-;  dec COL_VAR
-;  jsr mol_8bit
-;  jmp EXIT_PRINTCH  
+backspace_pressed:   ; to the end of the row above at column 0; nothing at the top left
+  lda COL_VAR
+  bne @left
+  lda ROW_VAR
+  beq JUMP_EXIT
+  dec ROW_VAR
+  lda #40
+  sta COL_VAR
+@left:
+  dec COL_VAR
+  jsr mol_8bit       ; X_VIDEO = new position
+  ldx X_VIDEO_LO
+  stx VREG
+  lda #$48           ; write to the name table at $0800
+  ora X_VIDEO_HI
+  sta VREG
+  lda #' '
+  sta VDATA          ; erase it; the cursor stays there
+  jmp EXIT_PRINTCH
   
 print_char:  
   LDX X_VIDEO_LO                              ; 1 byte A6 A7 A8 A9|A10 A11 A12 A13 (LSB)

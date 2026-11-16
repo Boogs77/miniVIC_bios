@@ -47,6 +47,16 @@ L0C32:
         ldx     #$00
 INLIN2:
         jsr     GETLN
+    .ifdef BOOGS
+        cmp     #$08            ; Backspace (DEL from the serial becomes $08 in CHRIN)
+        bne     :+
+        cpx     #$00
+        beq     INLIN2          ; empty line: nothing to erase
+        dex
+        jsr     BS_ECHO
+        jmp     INLIN2
+:
+    .endif
     .ifdef AIM65
         cmp     #$1A
         bne     INLINAIM

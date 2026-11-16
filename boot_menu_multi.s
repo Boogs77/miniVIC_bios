@@ -1,5 +1,5 @@
 .segment "PROGRAM"
-.define BIOS_VER "16.11.26 KEYB/SD"
+.define BIOS_VER "16.11.26 KEYB/SD R2"
 
 ZP_PTR = $40
 ZP_PTR2 = $42
@@ -902,28 +902,26 @@ menu_text:
     .byte " ",$0D, $0A
     .byte " 4. MiniVIC SYSTEM INFORMATION", $0D, $0A, 0
 
-sys_info_text:
-    .byte " ",$0D, $0A
-    .byte "   --- MiniVic SYSTEM INFORMATION ---", $0D, $0A
-    .byte " ",$0D, $0A
-    .byte "CPU : W65C02S 8 bit Microprocessor", $0A
-    .byte "CLOCK Frequency:    1MHz", $0D, $0A
-    .byte "RAM Memory:         32KB", $0D, $0A
-    .byte "RAM Address:        $0000-7FFF", $0D, $0A
-    .byte "ROM Memory:         32KB", $0D, $0A
-    .byte "ROM Address:        $8000-FFFF", $0D, $0A
-    .byte "SERIAL Interface:   DB9", $0D, $0A
-    .byte "SERIAL IC: 6551     Address $C000", $0D, $0A
-    .byte "KEYBOARD Interface: 5DIN", $0D, $0A
-    .byte "KEYBOARD IC: 6522   Address $D180", $0D, $0A
-    .byte "VIDEO CRT TEXT:     40x24 character", $0D, $0A
-    .byte "VIDEO CRT GRAPHICS: 256x192 pixel", $0D, $0A
-    .byte "VIDEO CRT ADDRESS:  $D190", $0D, $0A
-    .byte "POWER ADAPTER:      5V DC REGULATED", $0D, $0A
-    .byte "VERSION:            ", BIOS_VER , $0D, $0A;, $0A
-    .byte "OPERATING SYSTEM:   WozMon", $0D, $0A
-    .byte " ",$0D, $0A
-    .byte "       --------------------------", $0A
+sys_info_text:   ; 20 rows of at most 39 characters (the screen has 24 and does not scroll)
+    .byte " ", $0D, $0A
+    .byte "   --- MiniVIC SYSTEM INFORMATION ---", $0D, $0A
+    .byte " ", $0D, $0A
+    .byte "CPU:       W65C02S 8 bit, 1 MHz", $0D, $0A
+    .byte "RAM:       32KB    $0000-$7FFF", $0D, $0A
+    .byte "ROM:       32KB    $8000-$FFFF", $0D, $0A
+    .byte "VIDEO:     TMS9918A          $B000", $0D, $0A
+    .byte "           TEXT 40x24 CHARACTERS", $0D, $0A
+    .byte "           GRAPHICS 256x192 PIXELS", $0D, $0A
+    .byte "SERIAL:    W65C51 DB9        $C000", $0D, $0A
+    .byte "KEYBOARD:  W65C22 PS/2 DIN5  $D180", $0D, $0A
+    .byte "AUDIO:     2x AY-3-8910      $D380", $0D, $0A
+    .byte "JOYSTICK:  W65C22 2x DB9     $D580", $0D, $0A
+    .byte "SD CARD:   W65C22 SPI        $DD80", $0D, $0A
+    .byte "POWER:     5V DC REGULATED", $0D, $0A
+    .byte "VERSION:   ", BIOS_VER, $0D, $0A
+    .byte "SOFTWARE:  WozMon, MS BASIC 1977", $0D, $0A
+    .byte " ", $0D, $0A
+    .byte "       --------------------------", $0D, $0A
     .byte "            Press any key...     ", 0
 
 sys_sd_loading:

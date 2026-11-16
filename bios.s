@@ -22,7 +22,14 @@ CHRIN:
                 and     #$08
                 beq     @no_keypressed_serial
                 lda     ACIA_DATA
+                cmp     #$7F            ; DEL (Backspace of many serial terminals)
+                bne     @not_del
+                lda     #$08
+@not_del:
+                cmp     #$08
+                beq     @no_echo        ; Backspace: the caller erases (BS_ECHO)
                 jsr     CHROUT			; serial echo OK
+@no_echo:
                 sec
                 rts
                 
@@ -60,6 +67,8 @@ key_pressed:
     pha                 ; Save the character for the compare
     cmp #$0D            ; Is it ENTER?
     beq @skip_echo      
+    cmp #$08            ; Backspace: the caller erases (BS_ECHO)
+    beq @skip_echo
     
     pla                 ; Get the character back for the echo
     jsr CHROUT
@@ -78,15 +87,30 @@ key_pressed:
 ; Modifies: flags
 MONCOUT:
 CHROUT:
-                pha
 .ifdef BOOGS                
-                jsr     print_crt_ch ; mod from miniPET
+                jsr     print_crt_ch ; mod from miniPET (preserves A, X, Y)
 .endif
-
+; serial only
+SER_OUT:
+                pha
                 sta     ACIA_DATA
                 lda     #$FF
 @txdelay:       dec
                 bne     @txdelay
+                pla
+                rts
+
+; Erases the last typed character: CRT back one place and erase, "BS space BS" on the
+; serial terminal. Preserves A, X, Y.
+BS_ECHO:
+                pha
+                lda     #$08
+                jsr     print_crt_ch
+                jsr     SER_OUT
+                lda     #' '
+                jsr     SER_OUT
+                lda     #$08
+                jsr     SER_OUT
                 pla
                 rts
 

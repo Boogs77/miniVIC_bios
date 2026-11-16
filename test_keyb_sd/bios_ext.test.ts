@@ -143,7 +143,7 @@ function sdSuite(label: string, card: any, expectType: number) {
   const img = sdImage(9 * 1024 * 1024);
   const orig = img.slice();
   const m = machine(card, img);
-  assert(screenText(m).includes('16.11.26 KEYB/SD') || true, '');
+  assert(screenText(m).includes('16.11.26 KEYB/SD R2') || true, '');
   // load game from the SD menu: '3', '4' (ALL) then the program in position 2 (slot 1)
   tap(m, 'Digit3'); runFrames(m, 150);
   const menu = screenText(m);
@@ -219,10 +219,13 @@ function keyboard() {
   startProg(m);
   const keys = () => Array.from(m.ram.subarray(0x2000, 0x2000 + m.ram[0x0FF5]));
   const clear = () => { m.ram[0x0FF5] = 0; };
-  // classic mode first (as the old BIOS): arrows give the keypad digits, '?' is dropped
+  // classic mode first (as the old BIOS): arrows give the keypad digits. Since 16-11-2026 '?' is a
+  // real key, and the shifted keys from $56 on are no longer moved by one (Shift+] gave Enter)
   tap(m, 'KeyA'); tap(m, 'ArrowUp'); tap(m, 'Slash', ['ShiftLeft']); tap(m, 'KeyB', ['ShiftLeft']);
+  for (const k of ['BracketRight', 'Backslash', 'Enter', 'Backspace', 'Numpad1', 'Escape']) tap(m, k, ['ShiftLeft']);
+  tap(m, 'Tab'); tap(m, 'IntlBackslash'); tap(m, 'Backspace');
   const classic = keys();
-  assert(hex(classic) === hex([0x61, 0x38, 0x42]), 'classic mode: ' + hex(classic));
+  assert(hex(classic) === hex([0x61, 0x38, 0x3F, 0x42, 0x7D, 0x7C, 0x0D, 0x08, 0x31, 0x1B, 0x09, 0x5C, 0x08]), 'classic mode: ' + hex(classic));
   clear();
   const em = call(m, 4);
   assert(em.c === 0 || em.c === 1, '');
@@ -274,8 +277,13 @@ function basicAndWoz() {
   for (const c of ['Space', 'Digit2']) tap(m, c);
   tap(m, 'Equal', ['ShiftLeft']); tap(m, 'Digit3'); tap(m, 'Enter'); runFrames(m, 30);
   const basic = screenText(m);
-  // (typing with Shift in BASIC gives "ppRINT": same with the original 24.10.26 BIOS, not a regression)
-  assert(basic.includes('BYTES FREE') && basic.includes('OK'), 'BASIC did not start\n' + basic);
+  // (the "ppRINT" seen before 16-11-2026 came from typing during the RAM probe: keys were lost there)
+  assert(basic.includes('BYTES FREE') && /\nPRINT 2\+3\s+5\s/.test(basic), 'BASIC did not start or PRINT 2+3\n' + basic);
+  // Backspace erases on the screen and in the line; on an empty line it does nothing; '?' = PRINT
+  tap(m, 'Backspace');
+  tap(m, 'Slash', ['ShiftLeft']); tap(m, 'Digit7'); tap(m, 'Digit8', ['ShiftLeft']); tap(m, 'Digit9');
+  tap(m, 'Backspace'); tap(m, 'Digit6'); tap(m, 'Enter'); runFrames(m, 30);
+  assert(/\n\?7\*6\s+42\s/.test(screenText(m)), 'Backspace or ? in BASIC\n' + screenText(m));
   // keys typed on the PS/2 keyboard must not overwrite the BASIC program (it starts at $0401)
   const acia = m.board<SerialBoard>('serial')!.acia;
   const ser = (t: string) => { for (const ch of t) { acia.receive(ch.charCodeAt(0)); runFrames(m, 2); } runFrames(m, 20); };
@@ -288,8 +296,15 @@ function basicAndWoz() {
   const w = machine(null, sdImage(0));
   tap(w, 'Digit1'); runFrames(w, 60);
   assert(screenText(w).trim() === '\\', 'WozMon prompt not found');
-  const ver = (menu.match(/\d\d\.\d\d\.\d\d KEYB\/SD/) || [''])[0];
-  console.log(`      BASIC starts (one Enter per question, program safe from 300 typed keys) and WozMon ok; version on screen: "${ver || 'not on the main menu'}"`);
+  // System Information: the addresses of the boards (as decoded by the BIOS, games and emulator)
+  const inf = machine(null, sdImage(0));
+  tap(inf, 'Digit4'); runFrames(inf, 200);
+  const info = screenText(inf);
+  for (const re of [/W65C02S.*1 MHz/, /\$0000-\$7FFF/, /\$8000-\$FFFF/, /TMS9918A\s+\$B000/, /W65C51.*\$C000/, /KEYBOARD:.*\$D180/,
+    /AY-3-8910\s+\$D380/, /JOYSTICK:.*\$D580/, /SD CARD:.*\$DD80/, /VERSION:\s+\d\d\.\d\d\.\d\d KEYB\/SD/, /Press any key/])
+    assert(re.test(info), `System Information: ${re}\n` + info);
+  const ver = (menu.match(/\d\d\.\d\d\.\d\d KEYB\/SD( R\d+)?/) || [''])[0];
+  console.log(`      BASIC starts (one Enter per question, Backspace and ?, program safe from 300 typed keys), System Information and WozMon ok; version on screen: "${ver || 'not on the main menu'}"`);
 }
 
 // "[TYPE] Name" + CR LF on the serial line when a program starts (type in directory byte +6,

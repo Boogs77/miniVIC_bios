@@ -1,4 +1,4 @@
-# BIOS 16.11.26 KEYB/SD
+# BIOS 16.11.26 KEYB/SD R2
 
 Fork of the BIOS `024 - ... msbasic-20261024` (version 24.10.26), made for the applications of `MiniVIC Apps`.
 It fixes two problems: the keyboard gave no arrows, Delete, function keys, Ctrl and Alt, and the SD could only be read, and only up to 2 GB.
@@ -6,7 +6,7 @@ Everything that was there before works as before: menu, BASIC, WozMon, program l
 
 ## Build and EEPROM
 - `sh make.sh` creates `tmp/boogs.bin` (32 KB, the whole CAT28C256P image from `$8000` to `$FFFF`).
-- The main menu shows the version `16.11.26 KEYB/SD` (27.10.26 KEYB/SD before the SD submenus of 03-11-2026, 03.11.26 KEYB/SD before the BASIC and keyboard fixes of 16-11-2026).
+- The main menu shows the version `16.11.26 KEYB/SD R2` (before: 27.10.26 KEYB/SD, 03.11.26 KEYB/SD with the SD submenus, 16.11.26 KEYB/SD with the BASIC startup and keyboard buffer fixes).
 
 ## New jump table entries (at the end, the old ones do not move)
 
@@ -75,6 +75,12 @@ Both problems were already in the 24.10.26 BIOS.
 - **Typed keys overwrote the BASIC program.** The keyboard buffer was at `$0400-$04FF`, where the BASIC program starts (`$0401`): after a few lines typed on the PS/2 keyboard the program was broken and BASIC could hang. The buffer is now 128 bytes at `$0380-$03FF`, in the place of the old debug log of the typed keys (removed). `kb_wptr`/`kb_rptr` (`$0306`/`$0307`) still count from 0 to 255; the byte is at `$0380 + (pointer AND $7F)`.
 - `$0300-$04FF` stays reserved for the BIOS as before, so games and applications that use `JT_CHRIN_NOECHO` see no change; `$0400-$04FF` is no longer written by the keyboard.
 
+## BASIC keys and System Information (16-11-2026, R2)
+- **Backspace in BASIC.** It erases the last character of the line being typed: on the CRT the cursor goes back one place (to the end of the row above at column 0) and the character is erased; the serial terminal gets `BS space BS`. On an empty line it does nothing. `DEL` (`$7F`) from a serial terminal works as Backspace. `CHRIN` no longer echoes Backspace: `INLIN` (`inline.s`) calls `BS_ECHO` only when there is something to erase. `print_crt_ch` now handles `$08` (before, it printed character 8). The old BASIC keys `_` (erase) and `@` (cancel the line) still work.
+- **Classic keyboard tables.** The placeholder of the keys without a code is now `0` (it was `?`, so `?` could not be typed: now `?` works as `PRINT`). `keymap_shifted` had one byte too many at `$56`, which moved every shifted key from `$56` on: Shift+Enter gave nothing, Shift+`]` gave Enter, Shift+`\` nothing, the shifted keypad was one place off. New codes: Tab `$09`, the extra `\` `|` key of the 102-key boards (`$61`), Shift+Backspace `$08`, Shift+Esc `$1B`. Arrows still give the keypad digits (games use them), Caps Lock and Ctrl stay in the extended mode only.
+- **System Information** (key 4) has the real addresses: video TMS9918A at `$B000` (it said `$D190`), and the boards that were missing: audio 2x AY-3-8910 `$D380`, joystick `$D580`, SD card `$DD80`. 20 rows, so it fits the screen (it does not scroll).
+- The `ppRINT` seen in the emulator (doubled characters typing with Shift in BASIC) came from typing while BASIC was still probing the RAM after an empty `MEMORY SIZE?`: the keyboard bytes were lost there. With the fix of 16-11-2026 it no longer happens, so the interrupt-driven keyboard proposed for it was not made.
+
 ## New RAM used by the BIOS
 - `$0380-$03FF` keyboard buffer (was `$0400-$04FF`; `$037F`, the old debug pointer, is free)
 - `$0309` `kb_mode`
@@ -94,8 +100,9 @@ Both problems were already in the 24.10.26 BIOS.
 
 ## Tests (`test_keyb_sd/`)
 `node test_keyb_sd/run.mjs` tests `tmp/boogs.bin` on the core of the `bo6502-emulator` emulator (which is not changed). The checks:
-- BASIC and WozMon start; one Enter answers only `MEMORY SIZE?`; 300 keys typed on the keyboard leave a BASIC program unchanged;
-- classic mode unchanged;
+- BASIC and WozMon start; one Enter answers only `MEMORY SIZE?`; Backspace and `?` in a BASIC line; 300 keys typed on the keyboard leave a BASIC program unchanged;
+- System Information shows the addresses of every board and the version;
+- classic mode: as before, plus `?`, the shifted keys from `$56` on, Tab, `\` `|`, Shift+Backspace and Shift+Esc;
 - 34 extended keys plus Caps, Ctrl and Alt;
 - loading a game from the menu and writing/reading a sector in the document area (sector 16391), on the emulator SD, SDSC v1, SDSC v2 and SDHC;
 - error beyond the end of the card and behaviour without a card;
@@ -109,4 +116,4 @@ The SDHC/v2 model is in the test, because the emulator SD is v1 only.
 ## To be tried on the real hardware
 - SD cards of different types (one of 2 GB or less and one SDHC) and writing a sector.
 - BTC 5100: arrows, Fn+keys, F11/F12, Caps Lock.
-- Problem that was already there: in BASIC, typing with Shift gives doubled characters (`ppRINT`). It happens the same way with the 24.10.26 BIOS in the emulator, so it was not introduced here.
+- BASIC: Backspace on the CRT and on the serial terminal, `?`, Shift+`]` `\` and the keypad with Shift; doubled characters typing with Shift (`ppRINT`) should not appear any more.
