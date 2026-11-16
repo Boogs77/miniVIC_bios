@@ -43,7 +43,9 @@ CHRIN:
 key_pressed:
 
     phx                 ; <--- SAVE X (BASIC needs it intact!)
-    ldx kb_rptr
+    lda kb_rptr
+    and #KB_MASK
+    tax
     lda kb_buffer, x
     inc kb_rptr
     

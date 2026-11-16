@@ -51,7 +51,9 @@ NEXTCHAR:
                 jmp     NEXTCHAR
 
 key_pressed_kb:
-                ldx     kb_rptr
+                lda     kb_rptr
+                and     #KB_MASK
+                tax
                 lda     kb_buffer, x
                 STA     IN,Y            ; Add to text buffer.
                 inc     kb_rptr

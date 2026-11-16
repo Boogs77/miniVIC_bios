@@ -69,7 +69,14 @@ Key 3 of the main menu reads directory page 0 (no card or no valid directory: th
 - `SD_ANNOUNCE` knows type 4 and sends `[SOUND] Name`.
 - The SD format does not change: the 24.10.26 BIOS ignores the type byte, so it still reads the new SD.
 
+## BASIC and keyboard fixes (16-11-2026)
+Both problems were already in the 24.10.26 BIOS.
+- **One Enter answered two questions.** With an empty answer to `MEMORY SIZE?`, BASIC probes the RAM for about a second without reading the keyboard. The VIA keeps only the last PS/2 byte, so the release code `$F0` of that Enter was lost and its scancode `$5A` was read as a second Enter, which answered `TERMINAL WIDTH?`. After the probe (`L40FA` in `init.s`) the BIOS now decodes the pending byte, if any, and empties the keyboard buffer.
+- **Typed keys overwrote the BASIC program.** The keyboard buffer was at `$0400-$04FF`, where the BASIC program starts (`$0401`): after a few lines typed on the PS/2 keyboard the program was broken and BASIC could hang. The buffer is now 128 bytes at `$0380-$03FF`, in the place of the old debug log of the typed keys (removed). `kb_wptr`/`kb_rptr` (`$0306`/`$0307`) still count from 0 to 255; the byte is at `$0380 + (pointer AND $7F)`.
+- `$0300-$04FF` stays reserved for the BIOS as before, so games and applications that use `JT_CHRIN_NOECHO` see no change; `$0400-$04FF` is no longer written by the keyboard.
+
 ## New RAM used by the BIOS
+- `$0380-$03FF` keyboard buffer (was `$0400-$04FF`; `$037F`, the old debug pointer, is free)
 - `$0309` `kb_mode`
 - `$030A` `sd_type`
 - `$030B-$030E` R3/R7 response
@@ -87,7 +94,7 @@ Key 3 of the main menu reads directory page 0 (no card or no valid directory: th
 
 ## Tests (`test_keyb_sd/`)
 `node test_keyb_sd/run.mjs` tests `tmp/boogs.bin` on the core of the `bo6502-emulator` emulator (which is not changed). The checks:
-- BASIC and WozMon start;
+- BASIC and WozMon start; one Enter answers only `MEMORY SIZE?`; 300 keys typed on the keyboard leave a BASIC program unchanged;
 - classic mode unchanged;
 - 34 extended keys plus Caps, Ctrl and Alt;
 - loading a game from the menu and writing/reading a sector in the document area (sector 16391), on the emulator SD, SDSC v1, SDSC v2 and SDHC;

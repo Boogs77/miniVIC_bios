@@ -79,6 +79,14 @@ export default async function () {
   const key = (c: string) => mon.key(c);
   const serial: number[] = (mon as any).serial;
   const rows = () => screenText(m).split('\n').map(r => r.match(/^ ([1-9])[>.] (.*?)\s*$/)).filter(Boolean).map(r => r![2]);
+  // a page takes ~50 frames to draw and the BIOS then empties the keyboard for ~0.5 s:
+  // wait for the whole page and for that flush, or the next key arrives too early
+  const waitPage = (page: number, pages: number) => {
+    let f = 0;
+    while (!(screenText(m).includes(`PAGE ${page}/${pages}`) && screenText(m).includes('Select >')) && f < 600) { runFrames(m, 1); f++; }
+    assert(f < 600, `page ${page}/${pages} not drawn\n` + screenText(m));
+    runFrames(m, 40);
+  };
   const open = (sub: number) => { m.reset(); runFrames(m, 90); key('Digit3'); runFrames(m, 150); openSub(m, key, sub); };
   const all = dirList(img);
   assert(all.every(e => e.type >= 1 && e.type <= 4), 'programs without a type: ' + all.filter(e => !e.type).map(e => e.name));
@@ -97,14 +105,14 @@ export default async function () {
     assert(pages === 1 || screenText(m).includes(`PAGE 1/${pages}`), `submenu ${sub}: page count\n` + screenText(m));
     const got: string[] = [];
     for (let p = 0; p < pages; p++) {
-      if (p) { key('KeyD'); runFrames(m, 60); }
+      if (p) { key('KeyD'); waitPage(p + 1, pages); }
       got.push(...rows());
     }
     assert(JSON.stringify(got) === JSON.stringify(want), `submenu ${sub}:\n got  ${got.join(', ')}\n want ${want.join(', ')}\n` + screenText(m));
     if (pages > 1) {
-      key('KeyD'); runFrames(m, 60);
+      key('KeyD'); waitPage(1, pages);
       assert(rows()[0] === want[0], `submenu ${sub}: D on the last page does not go back to page 1`);
-      key('KeyA'); runFrames(m, 60);
+      key('KeyA'); waitPage(pages, pages);
       assert(rows()[0] === want[(pages - 1) * 9], `submenu ${sub}: A on page 1 does not go to the last page`);
     }
     console.log(`      submenu ${sub}: ${want.length} programs in ${pages} page(s): ${want.slice(0, 3).join(', ')}...`);

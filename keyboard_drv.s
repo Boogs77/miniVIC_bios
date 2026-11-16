@@ -28,11 +28,12 @@ KB_CAPS = %00100000        ; Caps Lock on (toggles at every press)
 kb_mode  = $0309
 KB_MODE_EXT = %10000000
 
-kb_buffer = $0400
-
-; **DEBUG**
-DEBUG_LOG   = $0380
-DEBUG_PTR   = $037F
+; Keyboard ring buffer: 128 bytes at $0380-$03FF (was $0400-$04FF, which is also the start
+; of the BASIC program: every key overwrote a byte of the program). It takes the place of
+; the old debug log of the typed keys. kb_wptr/kb_rptr count freely from 0 to 255; the
+; byte is at kb_buffer + (pointer AND KB_MASK). Empty when kb_wptr = kb_rptr.
+kb_buffer = $0380
+KB_MASK   = $7F
 
 
 INIT_KEYBOARD:
@@ -44,15 +45,6 @@ INIT_KEYBOARD:
   sta kb_rptr
   sta kb_flags
   sta kb_mode                ; classic mode
-
-  ; **INIT DEBUG**
-  sta DEBUG_PTR
-  ldx #$7F
-@clear:
-  lda #$FF
-  sta DEBUG_LOG, x
-  dex
-  bpl @clear
 
   lda #$01
   sta PCR
@@ -120,21 +112,13 @@ shifted_key:
 push_key:
   cmp #'?'
   beq exit
-  
-  ; **LOG CHARACTER TO DEBUG**
-  pha
-  phx
-  ldx DEBUG_PTR
-  cpx #$80
-  bcs @skip_log
-  sta DEBUG_LOG, x
-  inc DEBUG_PTR
-@skip_log:
-  plx
-  pla
-  
+
   ; Write to the buffer
-  ldx kb_wptr
+  pha
+  lda kb_wptr
+  and #KB_MASK
+  tax
+  pla
   sta kb_buffer, x
   inc kb_wptr
   jmp exit
@@ -266,7 +250,7 @@ kbx_interrupt:
   lda kb_flags
   eor #KB_CAPS
   sta kb_flags
-  bra @done
+  jmp @done                  ; (bra no longer reaches)
 
 @mod:                        ; A = modifier bit: pressed -> 1, released -> 0
   pha
@@ -341,7 +325,11 @@ kbx_interrupt:
 @not_letter:
   txa
 @push:
-  ldx kb_wptr
+  pha
+  lda kb_wptr
+  and #KB_MASK
+  tax
+  pla
   sta kb_buffer,x
   inc kb_wptr
 @done:

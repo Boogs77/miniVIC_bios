@@ -266,19 +266,30 @@ function basicAndWoz() {
   const m = machine(null, sdImage(0));
   const menu = screenText(m);
   tap(m, 'Digit2'); runFrames(m, 120);
-  tap(m, 'Enter'); runFrames(m, 60);           // MEMORY SIZE?
-  if (/WIDTH/.test(screenText(m))) { tap(m, 'Enter'); runFrames(m, 60); }
+  tap(m, 'Enter'); runFrames(m, 200);          // MEMORY SIZE? (empty: BASIC probes the RAM for ~1 s)
+  // the Enter is released during the probe: its lost $F0 must not turn into a second Enter
+  assert(/TERMINAL WIDTH\?$/.test(screenText(m).trimEnd()), 'one Enter also answered TERMINAL WIDTH\n' + screenText(m));
+  tap(m, 'Enter'); runFrames(m, 60);           // TERMINAL WIDTH?
   for (const c of ['KeyP', 'KeyR', 'KeyI', 'KeyN', 'KeyT']) tap(m, c, ['ShiftLeft']);
   for (const c of ['Space', 'Digit2']) tap(m, c);
   tap(m, 'Equal', ['ShiftLeft']); tap(m, 'Digit3'); tap(m, 'Enter'); runFrames(m, 30);
   const basic = screenText(m);
   // (typing with Shift in BASIC gives "ppRINT": same with the original 24.10.26 BIOS, not a regression)
   assert(basic.includes('BYTES FREE') && basic.includes('OK'), 'BASIC did not start\n' + basic);
+  // keys typed on the PS/2 keyboard must not overwrite the BASIC program (it starts at $0401)
+  const acia = m.board<SerialBoard>('serial')!.acia;
+  const ser = (t: string) => { for (const ch of t) { acia.receive(ch.charCodeAt(0)); runFrames(m, 2); } runFrames(m, 20); };
+  ser('10 PRINT "HELLO"\r'); ser('20 GOTO 10\r');
+  const prog = hex(m.ram.slice(0x401, 0x417));
+  for (let i = 0; i < 100; i++) { tap(m, 'Digit9'); tap(m, 'Digit9'); tap(m, 'Enter'); } // 300 keys; "99" deletes nothing
+  assert(hex(m.ram.slice(0x401, 0x417)) === prog, 'keyboard typing changed the BASIC program at $0401');
+  ser('\x1bLIST\r'); runFrames(m, 30);        // ESC clears the screen (it does not scroll), BASIC ignores it
+  assert(/10 PRINT "HELLO"\s+20 GOTO 10\s+OK$/.test(screenText(m).trimEnd()), 'LIST after typing\n' + screenText(m));
   const w = machine(null, sdImage(0));
   tap(w, 'Digit1'); runFrames(w, 60);
   assert(screenText(w).trim() === '\\', 'WozMon prompt not found');
-  const ver = (menu.match(/27\.10\.26 KEYB\/SD/) || [''])[0];
-  console.log(`      BASIC starts (BYTES FREE, OK) and WozMon ok; version on screen: "${ver || 'not on the main menu'}"`);
+  const ver = (menu.match(/\d\d\.\d\d\.\d\d KEYB\/SD/) || [''])[0];
+  console.log(`      BASIC starts (one Enter per question, program safe from 300 typed keys) and WozMon ok; version on screen: "${ver || 'not on the main menu'}"`);
 }
 
 // "[TYPE] Name" + CR LF on the serial line when a program starts (type in directory byte +6,

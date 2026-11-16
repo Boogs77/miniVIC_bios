@@ -295,6 +295,19 @@ L40EE:
         jmp     SYNERR
 .endif
 L40FA:
+.ifdef BOOGS
+; The memory probe above runs for about a second without reading the keyboard, and the
+; VIA keeps only the last PS/2 byte: the release code ($F0) of the Enter that answered
+; MEMORY SIZE was lost and its scancode would be read as a second Enter, answering
+; TERMINAL WIDTH by itself. Decode the pending byte (an $F0 sets the release state
+; correctly), then drop whatever is in the buffer.
+        lda     IFR
+        and     #$02
+        beq     @kb_clean
+        jsr     keyboard_interrupt
+@kb_clean:
+        jsr     FLUSH_KEYBOARD
+.endif
         lda     LINNUM
         ldy     LINNUM+1
         sta     MEMSIZ

@@ -795,7 +795,9 @@ CHRIN_NO_ECHO:
     lda     kb_rptr
     cmp     kb_wptr
     beq     @no_key
-    ldx     kb_rptr
+    lda     kb_rptr
+    and     #KB_MASK
+    tax
     lda     kb_buffer, x
     inc     kb_rptr
     sec
