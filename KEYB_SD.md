@@ -113,7 +113,5 @@ Both problems were already in the 24.10.26 BIOS.
 
 The SDHC/v2 model is in the test, because the emulator SD is v1 only.
 
-## To be tried on the real hardware
-- SD cards of different types (one of 2 GB or less and one SDHC) and writing a sector.
-- BTC 5100: arrows, Fn+keys, F11/F12, Caps Lock.
-- BASIC: Backspace on the CRT and on the serial terminal, `?`, Shift+`]` `\` and the keypad with Shift; doubled characters typing with Shift (`ppRINT`) should not appear any more.
+## Real hardware
+16.11.26 KEYB/SD R2 has been tried on the real miniVIC, also with some programs: no other tests are needed.
