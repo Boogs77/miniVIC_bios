@@ -1,13 +1,15 @@
 # miniVIC BIOS
 
 ROM image of the **miniVIC** (BO6502) computer: Microsoft BASIC, WozMon and a BIOS with a boot menu,
-PS/2 keyboard, TMS9918 text output, serial port and an SD card loader. The current version is
+DIN5 (AT) keyboard, TMS9918 text output, serial port and an SD card loader. The current version is
 **16.11.26 KEYB/SD R2**: it runs games and applications from the same SD card.
 
 - `bin/boogs.bin`: the 32 KB image to program into the CAT28C256P EEPROM (`$8000-$FFFF`).
   The [miniVIC emulator](https://github.com/Boogs77/BO6502-miniVIC-emulator) takes it from here.
 - [KEYB_SD.md](KEYB_SD.md): what changed from BIOS 24.10.26 (extended keyboard, SD read/write on all
   cards up to SDHC, new jump table entries, RAM used, tests).
+- The [miniVIC Operation Manual](https://github.com/Boogs77/miniVIC-manual) (English and Italian PDF) describes the BIOS menus, the jump table, the RAM it uses,
+  WozMon and Microsoft BASIC.
 - Games: [miniVIC_games](https://github.com/Boogs77/miniVIC_games). Applications:
   [miniVIC_apps](https://github.com/Boogs77/miniVIC_apps).
 
